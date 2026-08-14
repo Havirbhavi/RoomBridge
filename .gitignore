@@ -1,0 +1,11 @@
+node_modules/
+client/dist/
+.env
+ai-service/.env
+ai-service/venv/
+ai-service/__pycache__/
+ai-service/data/
+mcp-server/data/
+server/.data/
+.data/
+ai-service/.pytest_cache/
