@@ -44,6 +44,7 @@ import { getLiveRentalListings } from "./rentcast.js";
 import { enrichListingWithGooglePlace } from "./googlePlaces.js";
 import { callRoomBridgeTool } from "./mcpClient.js";
 import { getMatches } from "./matching.js";
+import { reviewListingSubmission } from "./listingReview.js";
 import {
   bearerToken,
   initializeAuthStorage,
@@ -210,7 +211,14 @@ app.post("/api/listings", async (req, res) => {
     const requiredFields = ["address", "unitNumber", "pricingBasis", "availableBeds", "availableFrom", "availableTo", "rent", "roomType"];
     const missingFields = requiredFields.filter((field) => req.body?.[field] === undefined || req.body?.[field] === null || String(req.body[field]).trim() === "");
     if (missingFields.length) return res.status(400).json({ error: `Complete these listing details: ${missingFields.join(", ")}` });
-    const listing = await createListing(req.body);
+    const moderationReview = await reviewListingSubmission(req.body);
+    if (moderationReview.status === "rejected") {
+      return res.status(422).json({
+        error: "This listing did not pass the publication review.",
+        review: moderationReview
+      });
+    }
+    const listing = await createListing({ ...req.body, moderationReview });
     const alertHits = savedSearchHitsForListing(listing);
     io.emit("listing:created", listing);
     alertHits.forEach((hit) => {
@@ -224,6 +232,17 @@ app.post("/api/listings", async (req, res) => {
     res.status(201).json({ listing, alertHits: alertHits.length });
   } catch (error) {
     res.status(error.status || 503).json({ error: error.message || "Listing could not be saved" });
+  }
+});
+
+app.post("/api/listings/review", async (req, res) => {
+  try {
+    res.status(201).json(await reviewListingSubmission(req.body));
+  } catch (error) {
+    res.status(error.status || 502).json({
+      error: error.message,
+      details: error.details || undefined
+    });
   }
 });
 

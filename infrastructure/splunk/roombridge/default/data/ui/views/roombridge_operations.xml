@@ -1,0 +1,23 @@
+<form version="1.1" theme="light">
+  <label>RoomBridge Operations</label>
+  <fieldset submitButton="false">
+    <input type="time" token="time_range">
+      <label>Time range</label>
+      <default><earliest>-24h@h</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+  <row>
+    <panel><single><title>Requests</title><search><query>sourcetype="roombridge:json" event_type="http_request_completed" | stats count</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search></single></panel>
+    <panel><single><title>Server errors</title><search><query>sourcetype="roombridge:json" event_type="http_request_completed" status&gt;=500 | stats count</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search></single></panel>
+    <panel><single><title>Grounding pass rate</title><search><query>sourcetype="roombridge:json" event_type="comparison_completed" | stats count as total count(eval(grounding="passed")) as passed | eval rate=round(100*passed/total,1)."%" | fields rate</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search></single></panel>
+    <panel><single><title>Q&amp;A abstention rate</title><search><query>sourcetype="roombridge:json" event_type="roomproof_question_completed" | stats count as total count(eval(outcome="abstained")) as abstained | eval rate=round(100*abstained/total,1)."%" | fields rate</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search></single></panel>
+  </row>
+  <row>
+    <panel><chart><title>Requests and errors over time</title><search><query>sourcetype="roombridge:json" event_type="http_request_completed" | timechart count as requests count(eval(status&gt;=500)) as errors</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search><option name="charting.chart">line</option></chart></panel>
+    <panel><chart><title>Latency by endpoint</title><search><query>sourcetype="roombridge:json" event_type="http_request_completed" | stats perc95(latency_ms) as p95_ms avg(latency_ms) as avg_ms by path | sort - p95_ms</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search><option name="charting.chart">bar</option></chart></panel>
+  </row>
+  <row>
+    <panel><table><title>Grounding and fallback outcomes</title><search><query>sourcetype="roombridge:json" event_type="comparison_completed" | stats count avg(grounding_retries) as avg_retries by grounding explanation_source</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search></table></panel>
+    <panel><table><title>Recent RoomProof risk events</title><search><query>sourcetype="roombridge:json" event_type="roomproof_report_completed" | table _time report_id status evidence_count finding_count conflict_count high_severity_count | sort - _time</query><earliest>$time_range.earliest$</earliest><latest>$time_range.latest$</latest></search></table></panel>
+  </row>
+</form>

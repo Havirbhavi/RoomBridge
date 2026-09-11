@@ -39,9 +39,25 @@ services:
       REDIS_URL: redis://redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      APP_ENV: local-docker
+      SPLUNK_HEC_URL: http://splunk:8088/services/collector/event
+      SPLUNK_HEC_TOKEN: ${SPLUNK_HEC_TOKEN:-roombridge-local-hec-token}
     ports: ["8001:8001"]
     volumes: ["roomproof-data:/data"]
     depends_on: [postgres, redis, kafka]
+
+  splunk:
+    image: splunk/splunk:9.4
+    environment:
+      SPLUNK_START_ARGS: --accept-license
+      SPLUNK_PASSWORD: ${SPLUNK_PASSWORD:-RoomBridgeLocal1!}
+      SPLUNK_HEC_TOKEN: ${SPLUNK_HEC_TOKEN:-roombridge-local-hec-token}
+    ports:
+      - "8000:8000"
+      - "8088:8088"
+    volumes:
+      - roombridge-splunk:/opt/splunk/var
+      - ./infrastructure/splunk/roombridge:/opt/splunk/etc/apps/roombridge:ro
 
   mcp-server:
     build: ./mcp-server
@@ -54,6 +70,26 @@ services:
     ports: ["8002:8002"]
     volumes: ["mcp-audit:/data"]
 
+  listing-review:
+    build: ./listing-review-service
+    environment:
+      APP_NAME: RoomBridge Listing Review
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${LISTING_REVIEW_APP_KEY:-base64:dpxZB54CAodPcIN3eo64+FKVPlVrCjTdVzi/XS4tLhI=}
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: roombridge
+      DB_USERNAME: roombridge
+      DB_PASSWORD: roombridge-local
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+    ports: ["8010:8010"]
+    depends_on: [postgres]
+
   api:
     build: ./server
     environment:
@@ -61,11 +97,33 @@ services:
       CLIENT_ORIGIN: http://localhost:5173
       AI_SERVICE_URL: http://ai-service:8001
       MCP_SERVER_URL: http://mcp-server:8002/mcp
+      LISTING_REVIEW_URL: http://listing-review:8010
       DATABASE_URL: postgresql://roombridge:roombridge-local@postgres:5432/roombridge
     ports: ["4000:4000"]
-    depends_on: [postgres, ai-service, mcp-server]
+    depends_on: [postgres, ai-service, mcp-server, listing-review]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    ports: ["9090:9090"]
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on: [ai-service]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: roombridge-local
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports: ["3001:3000"]
+    volumes:
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
 
 volumes:
   roombridge-postgres:
   roomproof-data:
   mcp-audit:
+  roombridge-splunk:

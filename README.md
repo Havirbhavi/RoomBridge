@@ -16,6 +16,7 @@ RoomBridge is a fullstack housing and roommate matcher for students arriving at 
 - True monthly and move-in cost calculations with an interactive Costs workspace
 - Grounded Compare & Match agent with deterministic scoring and optional Anthropic explanations
 - RoomProof evidence workspace for lease, image, listing-consistency, and duplicate-artifact review
+- Laravel listing-review service with request validation, rule-based risk checks, and PostgreSQL audit records
 - Responsive React dashboard designed for repeat use
 
 ## Run locally
@@ -30,6 +31,33 @@ Backend API: http://localhost:4000/api
 Realtime: Socket.IO on http://localhost:4000
 Compare agent: http://localhost:8001
 MCP server: http://localhost:8002/mcp
+Laravel listing review: http://localhost:8010/api/health
+
+### Laravel listing review
+
+`listing-review-service/` is a Laravel 12 and PHP 8.4 API responsible for
+pre-publication listing moderation. Express sends each host submission to
+`POST /api/listing-reviews`; Laravel validates the contract, checks required
+photo categories, rent plausibility, location completeness, and risky
+off-platform contact language, then persists the decision through Eloquent.
+Rejected submissions are blocked and `needs_review` decisions remain attached
+to the listing for auditability.
+
+Run it independently after installing PHP and Composer:
+
+```bash
+cd listing-review-service
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve --port=8010
+```
+
+Run its feature tests with `npm run review:test`. The full Docker Compose stack
+builds and configures the Laravel service automatically.
+Operations can inspect recent moderation outcomes with
+`php artisan listing-reviews:summary --days=30` from the service directory.
 
 ### Compare & Match agent
 
@@ -79,6 +107,25 @@ the modal instead of requiring an email provider.
 `infrastructure/k8s/roomproof.yaml` adds health probes, resource limits, and
 horizontal autoscaling. Prometheus metrics are exposed by the AI service at
 `GET /metrics`.
+
+The local Docker stack also provisions Prometheus at `http://localhost:9090`
+and Grafana at `http://localhost:3001` (development login: `admin` /
+`roombridge-local`). The provisioned **RoomBridge AI Operations** dashboard
+tracks request throughput, server-error rate, p95 latency, comparison
+grounding pass rate, grounding retries and fallbacks, RoomProof report and
+finding outcomes, evidence volume, and grounded-Q&A abstention rate. These
+KPIs measure both service health and AI answer quality instead of treating a
+successful HTTP response as sufficient evidence of a healthy workflow.
+
+Splunk is available at `http://localhost:8000` in the Docker stack (local user
+`admin`; password from `SPLUNK_PASSWORD`). The AI service sends non-blocking,
+structured events through Splunk HTTP Event Collector using
+`SPLUNK_HEC_TOKEN`. The bundled **RoomBridge Operations** app provides request
+and error trends, endpoint latency, grounding/fallback outcomes, Q&A
+abstention, and RoomProof risk investigations. Scheduled searches detect
+elevated 5xx responses, repeated grounding failures, and high abstention.
+Events contain operational metadata and correlation IDs, but exclude lease
+text, user questions, and other uploaded content.
 
 Local inference currently provides PDF/text extraction, image indexing,
 content-hash graph signals, consistency checks, citations, abstention, and
