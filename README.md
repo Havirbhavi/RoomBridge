@@ -89,6 +89,13 @@ ai-service/venv/bin/python ai-service/evals/run_evals.py
 ai-service/venv/bin/python ai-service/evals/run_graph_evals.py
 ```
 
+The RoomProof v2 benchmark generates 50 controlled scenarios covering
+consistent leases, missing evidence, and rent, deposit, unit, utility, and pet
+policy conflicts. It reports scenario accuracy, conflict-detection recall,
+supported-finding citation precision, and abstention accuracy independently.
+The benchmark is deterministic and intended for regression testing; its
+results should not be represented as accuracy on real-world production data.
+
 The deployable reference stack is in `docker-compose.yml` and includes
 PostgreSQL/pgvector, Redis, Kafka, the AI service, and the Express API.
 Accounts and hashed session tokens are stored in PostgreSQL when
